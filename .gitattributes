@@ -1,0 +1,2 @@
+# Manter o .env da branch destino em merges (nunca sobrescrever)
+config/.env merge=ours

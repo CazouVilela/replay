@@ -1,0 +1,1 @@
+/home/cazouvilela/projetos/IDE_customizada/.claude/ORIENTACOES_DESENVOLVIMENTO.md
