@@ -106,8 +106,11 @@ ipcMain.handle('save-excel', async (event, data) => {
 
     if (!paciente) continue;
 
-    if (!pagMap[paciente]) pagMap[paciente] = { total: 0, profs: {} };
+    const convenio = (row.convenio || '').trim();
+
+    if (!pagMap[paciente]) pagMap[paciente] = { total: 0, convenio: '', profs: {} };
     pagMap[paciente].total += valor;
+    if (convenio && !pagMap[paciente].convenio) pagMap[paciente].convenio = convenio;
 
     if (profissional) {
       allProfs.add(profissional);
@@ -122,6 +125,7 @@ ipcMain.handle('save-excel', async (event, data) => {
     // Cabecalho: Paciente | Total | Prof1 | Prof2 | ...
     sheetPag.columns = [
       { header: 'Paciente', key: 'paciente', width: 30 },
+      { header: 'Convenio', key: 'convenio', width: 20 },
       { header: 'Total', key: 'total', width: 14 },
       ...profsList.map(p => ({ header: p, key: `prof_${p}`, width: 20 })),
     ];
@@ -138,6 +142,7 @@ ipcMain.handle('save-excel', async (event, data) => {
     for (const pac of pacientes) {
       const rowData = {
         paciente: pac,
+        convenio: pagMap[pac].convenio,
         total: pagMap[pac].total,
       };
       for (const prof of profsList) {
@@ -149,7 +154,7 @@ ipcMain.handle('save-excel', async (event, data) => {
 
     // Formato moeda nas colunas de valor
     const moneyFmt = '#.##0,00';
-    for (let col = 2; col <= profsList.length + 2; col++) {
+    for (let col = 3; col <= profsList.length + 3; col++) {
       sheetPag.getColumn(col).numFmt = moneyFmt;
     }
   }
