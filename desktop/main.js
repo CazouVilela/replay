@@ -86,10 +86,11 @@ ipcMain.handle('save-excel', async (event, data) => {
   };
 
   // ==================== ABA RECEBIMENTOS ====================
-  // Status que entram na soma
-  const statusCobraveis = [
-    'atendido',
-    'faltou (sem aviso prévio)',
+  // Status que NAO entram na soma (nao cobraveis)
+  const statusExcluidos = [
+    'faltou (com aviso prévio)',
+    'não atendido (sem cobrança)',
+    'cancelado',
   ];
 
   // Agrupar por paciente e profissional
@@ -98,7 +99,7 @@ ipcMain.handle('save-excel', async (event, data) => {
 
   for (const row of data.rows) {
     const statusLower = (row.status || '').toLowerCase();
-    if (!statusCobraveis.includes(statusLower)) continue;
+    if (statusExcluidos.includes(statusLower)) continue;
 
     const paciente = (row.paciente || '').trim();
     const profissional = (row.profissional || '').trim();
@@ -109,9 +110,15 @@ ipcMain.handle('save-excel', async (event, data) => {
 
     const convenio = (row.convenio || '').trim();
 
-    if (!pagMap[paciente]) pagMap[paciente] = { total: 0, recebidos: 0, aReceber: 0, convenio: '', profs: {} };
+    // Status futuros (ainda nao atendidos)
+    const statusFuturos = ['agendado', 'presença confirmada', 'remarcar'];
+    const isFuturo = statusFuturos.includes(statusLower);
+
+    if (!pagMap[paciente]) pagMap[paciente] = { total: 0, recebidos: 0, aReceber: 0, futuros: 0, convenio: '', profs: {} };
     pagMap[paciente].total += valor;
-    if (pago) {
+    if (isFuturo) {
+      pagMap[paciente].futuros += valor;
+    } else if (pago) {
       pagMap[paciente].recebidos += valor;
     } else {
       pagMap[paciente].aReceber += valor;
@@ -134,6 +141,7 @@ ipcMain.handle('save-excel', async (event, data) => {
       { header: 'Total', key: 'total', width: 14 },
       { header: 'Recebidos', key: 'recebidos', width: 14 },
       { header: 'A receber', key: 'aReceber', width: 14 },
+      { header: 'Agendamentos futuros', key: 'futuros', width: 22 },
       ...profsList.map(p => ({ header: p, key: `prof_${p}`, width: 20 })),
     ];
 
@@ -154,6 +162,7 @@ ipcMain.handle('save-excel', async (event, data) => {
         total: d.total || '',
         recebidos: d.recebidos || '',
         aReceber: d.aReceber || '',
+        futuros: d.futuros || '',
       };
       for (const prof of profsList) {
         const v = d.profs[prof] || 0;
@@ -164,7 +173,7 @@ ipcMain.handle('save-excel', async (event, data) => {
 
     // Formato moeda nas colunas de valor (col 3 em diante)
     const moneyFmt = '#.##0,00';
-    for (let col = 3; col <= profsList.length + 5; col++) {
+    for (let col = 3; col <= profsList.length + 6; col++) {
       sheetPag.getColumn(col).numFmt = moneyFmt;
     }
   }
