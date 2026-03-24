@@ -40,6 +40,9 @@ function renderPage(exeFile) {
         <div class="file-meta">${formatSize(stat.size)} &middot; ${stat.mtime.toLocaleDateString('pt-BR')}</div>
       </div>
       <a href="/download" class="btn-download">Baixar Replay</a>
+      <div style="margin-top:16px">
+        <a href="/instalador" class="btn-installer">Baixar Instalador/Atualizador (.bat)</a>
+      </div>
     `;
   } else {
     fileInfo = '<p class="no-file">Nenhum build disponivel.</p>';
@@ -115,6 +118,12 @@ function renderPage(exeFile) {
       transition: background 0.2s;
     }
     .btn-download:hover { background: #27ae60; }
+    .btn-installer {
+      color: #7ec8e3;
+      font-size: 12px;
+      text-decoration: underline;
+    }
+    .btn-installer:hover { color: #fff; }
     .no-file { color: #e74c3c; }
     .footer {
       margin-top: 32px;
@@ -147,6 +156,23 @@ const server = http.createServer((req, res) => {
       'Content-Length': stat.size,
     });
     fs.createReadStream(filePath).pipe(res);
+    return;
+  }
+
+  if (req.url === '/instalador') {
+    const batPath = path.join(DIST_DIR, 'instalar-replay.bat');
+    if (fs.existsSync(batPath)) {
+      const stat = fs.statSync(batPath);
+      res.writeHead(200, {
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': 'attachment; filename="instalar-replay.bat"',
+        'Content-Length': stat.size,
+      });
+      fs.createReadStream(batPath).pipe(res);
+      return;
+    }
+    res.writeHead(404);
+    res.end('Instalador nao encontrado');
     return;
   }
 
