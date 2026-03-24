@@ -220,23 +220,40 @@ btnDiscover.addEventListener('click', async () => {
 // ==================== NAVEGACAO ====================
 
 /**
- * Parseia a data exibida no titulo do FullCalendar.
- * Formatos possiveis: "23 de marco de 2026", "segunda-feira"
- * Retorna YYYY-MM-DD ou null.
- */
-function parseFCDate(titleText) {
-  // Extrair do data-date do cabecalho do dia na lista (mais confiavel)
-  return null; // Usaremos outro metodo
-}
-
-/**
- * Obtem a data atual exibida no calendario (do atributo data-date).
+ * Obtem a data atual exibida no calendario.
+ * Tenta primeiro o atributo data-date do cabecalho do dia (quando ha eventos).
+ * Fallback: parseia o titulo do toolbar ("24 de marco de 2026" → "2026-03-24").
  */
 async function getCurrentDate() {
   return exec(`
     (() => {
-      const dayRow = document.querySelector('${SEL.dayHeader}');
-      return dayRow ? dayRow.getAttribute('data-date') : null;
+      // 1. Tentar data-date do cabecalho (so existe quando ha eventos)
+      const dayRow = document.querySelector('tr.fc-list-day');
+      if (dayRow) {
+        const d = dayRow.getAttribute('data-date');
+        if (d) return d;
+      }
+
+      // 2. Fallback: parsear titulo do toolbar
+      const title = document.querySelector('.fc-toolbar-title');
+      if (!title) return null;
+      const text = title.textContent.trim();
+
+      const meses = {
+        'janeiro':1, 'fevereiro':2, 'março':3, 'marco':3, 'abril':4,
+        'maio':5, 'junho':6, 'julho':7, 'agosto':8, 'setembro':9,
+        'outubro':10, 'novembro':11, 'dezembro':12
+      };
+
+      // Formato: "24 de março de 2026"
+      const m = text.match(/(\\d{1,2})\\s+de\\s+(\\w+)\\s+de\\s+(\\d{4})/);
+      if (m) {
+        const dia = m[1].padStart(2, '0');
+        const mes = meses[m[2].toLowerCase()];
+        if (mes) return m[3] + '-' + String(mes).padStart(2, '0') + '-' + dia;
+      }
+
+      return null;
     })();
   `);
 }
