@@ -141,7 +141,8 @@ ipcMain.handle('save-excel', async (event, data) => {
         total: pagMap[pac].total,
       };
       for (const prof of profsList) {
-        rowData[`prof_${prof}`] = pagMap[pac].profs[prof] || 0;
+        const v = pagMap[pac].profs[prof] || 0;
+        rowData[`prof_${prof}`] = v > 0 ? v : '';
       }
       sheetPag.addRow(rowData);
     }
