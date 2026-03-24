@@ -60,6 +60,7 @@ ipcMain.handle('save-excel', async (event, data) => {
     { header: 'Data Pgto', key: 'dataPagamento', width: 14 },
     { header: 'Status', key: 'status', width: 18 },
     { header: 'Convenio', key: 'convenio', width: 20 },
+    { header: 'Inconsistencias', key: 'inconsistencia', width: 40 },
   ];
 
   // Estilo do cabecalho
@@ -81,11 +82,48 @@ ipcMain.handle('save-excel', async (event, data) => {
   // Auto-filtro
   sheet.autoFilter = {
     from: 'A1',
-    to: `J${data.rows.length + 1}`,
+    to: `K${data.rows.length + 1}`,
   };
 
   await workbook.xlsx.writeFile(filePath);
   return { success: true, filePath };
+});
+
+// IPC: Carregar tabela de precos (.xlsx)
+ipcMain.handle('load-price-table', async (event, filePath) => {
+  const ExcelJS = require('exceljs');
+
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(filePath);
+  const sheet = workbook.worksheets[0];
+
+  // Header: coluna 1 = "Pacientes" (ignorar), colunas 2+ = especialidades
+  const specialties = [];
+  sheet.getRow(1).eachCell((cell, colNumber) => {
+    if (colNumber > 1) {
+      specialties.push({ col: colNumber, name: (cell.value || '').toString().trim() });
+    }
+  });
+
+  // Dados: coluna 1 = nome paciente, colunas 2+ = valores
+  const priceMap = {};
+  sheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const patient = (row.getCell(1).value || '').toString().trim();
+    if (!patient) return;
+    const key = patient.toLowerCase();
+    priceMap[key] = {};
+    for (const spec of specialties) {
+      const val = row.getCell(spec.col).value;
+      priceMap[key][spec.name.toLowerCase()] = parseFloat(val) || 0;
+    }
+  });
+
+  return {
+    specialties: specialties.map(s => s.name),
+    priceMap,
+    patientCount: Object.keys(priceMap).length,
+  };
 });
 
 // IPC: Capturar DOM para debug

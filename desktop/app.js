@@ -14,8 +14,14 @@ const progressCurrent = document.getElementById('progress-current');
 const progressTotal = document.getElementById('progress-total');
 const logContent = document.getElementById('log-content');
 
+const priceTableInput = document.getElementById('price-table');
+const priceTableLabel = document.getElementById('price-table-label');
+
 let running = false;
 let shouldStop = false;
+// Tabela de precos: { priceMap: { paciente_lower: { especialidade_lower: valor } }, specialties: [] }
+// Em window para ser acessivel pelo listener e pelo CDP de debug
+window.priceTable = null;
 
 // ==================== SELETORES (mapeados do DOM real) ====================
 const SEL = {
@@ -499,6 +505,9 @@ async function extractDay(dateStr) {
       // Formatar horario
       const horario = horaInicio && horaFim ? `${horaInicio} - ${horaFim}` : horaInicio || '';
 
+      // Validar contra tabela de precos
+      const inconsistencia = validarPreco(paciente, especialidade, valor);
+
       appointments.push({
         data: data || dateStr,
         horario,
@@ -510,9 +519,11 @@ async function extractDay(dateStr) {
         dataPagamento: dataPagamento || '',
         status: status || '',
         convenio: convenio || '',
+        inconsistencia,
       });
 
-      log(`  OK: ${paciente} | ${horario} | ${profissional} | R$ ${valor} | ${status} | ${convenio} | ${pago ? 'Pago' : 'Nao pago'}`, 'ok');
+      const infoExtra = inconsistencia ? ` ⚠ ${inconsistencia}` : '';
+      log(`  OK: ${paciente} | ${horario} | ${profissional} | R$ ${valor} | ${status}${infoExtra}`, inconsistencia ? 'warn' : 'ok');
 
       // 8. Fechar modal
       await clickEl(SEL.modalClose);
@@ -635,6 +646,51 @@ async function startExtraction() {
   progressEl.classList.add('hidden');
 }
 
+// ==================== TABELA DE PRECOS ====================
+
+/**
+ * Converte valor brasileiro ("150,00") para float (150.00).
+ */
+function parseValorBR(val) {
+  if (!val || val === '') return 0;
+  return parseFloat(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
+}
+
+/**
+ * Valida o valor de um agendamento contra a tabela de precos.
+ * Retorna string de inconsistencia ou "" se ok.
+ */
+function validarPreco(paciente, especialidade, valorStr) {
+  if (!window.priceTable) return '';
+
+  const pacKey = (paciente || '').trim().toLowerCase();
+  const espKey = (especialidade || '').trim().toLowerCase();
+  const valorExtraido = parseValorBR(valorStr);
+
+  // Paciente nao encontrado na tabela
+  if (!window.priceTable.priceMap[pacKey]) {
+    return 'paciente sem tabela';
+  }
+
+  // Especialidade nao encontrada nas colunas
+  if (!(espKey in window.priceTable.priceMap[pacKey])) {
+    return 'especialidade nao encontrada';
+  }
+
+  const valorTabela = window.priceTable.priceMap[pacKey][espKey];
+
+  // Especialidade sem valor para o paciente (0 ou vazio na tabela)
+  if (!valorTabela || valorTabela === 0) {
+    return 'especialidade sem valor para o paciente';
+  }
+
+  // Comparar valores
+  if (valorExtraido > valorTabela) return 'valor maior que tabela';
+  if (valorExtraido < valorTabela) return 'valor menor que tabela';
+
+  return '';
+}
+
 // ==================== EVENTOS ====================
 
 webview.addEventListener('dom-ready', () => {
@@ -663,6 +719,25 @@ btnStart.addEventListener('click', startExtraction);
 btnStop.addEventListener('click', () => {
   shouldStop = true;
   log('Parando extracao...');
+});
+
+// Upload da tabela de precos
+priceTableInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  try {
+    log(`Carregando tabela de precos: ${file.name}...`);
+    const result = await window.api.loadPriceTable(file.path);
+    window.priceTable = result;
+    priceTableLabel.classList.add('loaded');
+    priceTableLabel.textContent = `${file.name} (${result.patientCount} pacientes)`;
+    log(`Tabela carregada: ${result.patientCount} pacientes, ${result.specialties.length} especialidades (${result.specialties.join(', ')})`, 'ok');
+  } catch (err) {
+    log(`Erro ao carregar tabela: ${err.message}`, 'error');
+    window.priceTable = null;
+    priceTableLabel.classList.remove('loaded');
+  }
 });
 
 // Data padrao: mes atual

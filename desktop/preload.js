@@ -6,4 +6,5 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   saveExcel: (data) => ipcRenderer.invoke('save-excel', data),
   saveDebug: (data) => ipcRenderer.invoke('save-debug', data),
+  loadPriceTable: (filePath) => ipcRenderer.invoke('load-price-table', filePath),
 });
