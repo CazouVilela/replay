@@ -85,6 +85,74 @@ ipcMain.handle('save-excel', async (event, data) => {
     to: `K${data.rows.length + 1}`,
   };
 
+  // ==================== ABA PAGAMENTOS ====================
+  // Status que NAO entram na soma
+  const statusExcluidos = [
+    'faltou (com aviso prévio)',
+    'não atendido (sem cobrança)',
+  ];
+
+  // Agrupar por paciente e profissional (excluindo status nao cobraveis)
+  const pagMap = {};       // { paciente: { total: N, profs: { profissional: N } } }
+  const allProfs = new Set();
+
+  for (const row of data.rows) {
+    const statusLower = (row.status || '').toLowerCase();
+    if (statusExcluidos.includes(statusLower)) continue;
+
+    const paciente = (row.paciente || '').trim();
+    const profissional = (row.profissional || '').trim();
+    const valor = parseFloat((row.valor || '0').replace(/\./g, '').replace(',', '.')) || 0;
+
+    if (!paciente) continue;
+
+    if (!pagMap[paciente]) pagMap[paciente] = { total: 0, profs: {} };
+    pagMap[paciente].total += valor;
+
+    if (profissional) {
+      allProfs.add(profissional);
+      pagMap[paciente].profs[profissional] = (pagMap[paciente].profs[profissional] || 0) + valor;
+    }
+  }
+
+  if (Object.keys(pagMap).length > 0) {
+    const sheetPag = workbook.addWorksheet('Pagamentos');
+    const profsList = Array.from(allProfs).sort();
+
+    // Cabecalho: Paciente | Total | Prof1 | Prof2 | ...
+    sheetPag.columns = [
+      { header: 'Paciente', key: 'paciente', width: 30 },
+      { header: 'Total', key: 'total', width: 14 },
+      ...profsList.map(p => ({ header: p, key: `prof_${p}`, width: 20 })),
+    ];
+
+    // Estilo do cabecalho
+    sheetPag.getRow(1).eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1565C0' } };
+      cell.alignment = { horizontal: 'center' };
+    });
+
+    // Dados
+    const pacientes = Object.keys(pagMap).sort();
+    for (const pac of pacientes) {
+      const rowData = {
+        paciente: pac,
+        total: pagMap[pac].total,
+      };
+      for (const prof of profsList) {
+        rowData[`prof_${prof}`] = pagMap[pac].profs[prof] || 0;
+      }
+      sheetPag.addRow(rowData);
+    }
+
+    // Formato moeda nas colunas de valor
+    const moneyFmt = '#.##0,00';
+    for (let col = 2; col <= profsList.length + 2; col++) {
+      sheetPag.getColumn(col).numFmt = moneyFmt;
+    }
+  }
+
   await workbook.xlsx.writeFile(filePath);
   return { success: true, filePath };
 });
