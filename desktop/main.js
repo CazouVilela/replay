@@ -104,7 +104,15 @@ ipcMain.handle('save-excel', async (event, data) => {
     const paciente = (row.paciente || '').trim();
     const profissional = (row.profissional || '').trim();
     const valor = parseFloat((row.valor || '0').replace(/\./g, '').replace(',', '.')) || 0;
-    const pago = (row.pago || '').toLowerCase() !== 'nao';
+    // Pago se: campo Pago != "Nao" OU Data Pgto preenchida e <= hoje
+    let pago = (row.pago || '').toLowerCase() !== 'nao';
+    if (!pago && row.dataPagamento) {
+      const parts = row.dataPagamento.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if (parts) {
+        const dtPgto = new Date(`${parts[3]}-${parts[2]}-${parts[1]}T12:00:00`);
+        if (dtPgto <= new Date()) pago = true;
+      }
+    }
 
     if (!paciente) continue;
 
