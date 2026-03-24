@@ -28,12 +28,17 @@
     ],
     "win": {
       "target": [
-        "portable"
+        "nsis"
       ],
       "icon": "desktop/icon.ico"
     },
-    "portable": {
-      "artifactName": "Replay-${version}.exe"
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Replay-Setup-${version}.exe",
+      "shortcutName": "Replay",
+      "include": "installer/nsis-cleanup.nsh",
+      "deleteAppDataOnUninstall": true
     },
     "linux": {
       "target": "AppImage",

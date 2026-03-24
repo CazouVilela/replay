@@ -11,7 +11,7 @@ const DIST_DIR = path.join(__dirname, '..', 'dist');
 
 function getLatestExe() {
   if (!fs.existsSync(DIST_DIR)) return null;
-  const files = fs.readdirSync(DIST_DIR).filter(f => f.endsWith('.exe'));
+  const files = fs.readdirSync(DIST_DIR).filter(f => f.endsWith('.exe') && !f.includes('uninstaller'));
   if (files.length === 0) return null;
   // Pegar o mais recente
   files.sort((a, b) => {
@@ -138,7 +138,7 @@ function renderPage(exeFile) {
     <div class="subtitle">Extrator de Agenda ZenFisio</div>
     <div class="version">v${pkg.version}</div>
     ${fileInfo}
-    <div class="footer">Windows 10/11 &middot; Nao requer instalacao</div>
+    <div class="footer">Windows 10/11 &middot; Instalador com wizard e limpeza de cache automatica</div>
   </div>
 </body>
 </html>`;
