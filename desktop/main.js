@@ -164,11 +164,12 @@ ipcMain.handle('save-excel', async (event, data) => {
 });
 
 // IPC: Carregar tabela de precos (.xlsx)
-ipcMain.handle('load-price-table', async (event, filePath) => {
+ipcMain.handle('load-price-table', async (event, fileData) => {
   const ExcelJS = require('exceljs');
 
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(filePath);
+  const buffer = Buffer.from(fileData);
+  await workbook.xlsx.load(buffer);
   const sheet = workbook.worksheets[0];
 
   // Header: coluna 1 = "Pacientes" (ignorar), colunas 2+ = especialidades

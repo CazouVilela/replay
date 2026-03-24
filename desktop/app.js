@@ -728,7 +728,10 @@ priceTableInput.addEventListener('change', async (e) => {
 
   try {
     log(`Carregando tabela de precos: ${file.name}...`);
-    const result = await window.api.loadPriceTable(file.path);
+    // Ler arquivo como ArrayBuffer (file.path nao funciona com contextIsolation)
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8 = Array.from(new Uint8Array(arrayBuffer));
+    const result = await window.api.loadPriceTable(uint8);
     window.priceTable = result;
     priceTableLabel.classList.add('loaded');
     priceTableLabel.textContent = `${file.name} (${result.patientCount} pacientes)`;
