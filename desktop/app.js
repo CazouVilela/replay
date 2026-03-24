@@ -245,8 +245,8 @@ async function getCurrentDate() {
         'outubro':10, 'novembro':11, 'dezembro':12
       };
 
-      // Formato: "24 de março de 2026"
-      const m = text.match(/(\\d{1,2})\\s+de\\s+(\\w+)\\s+de\\s+(\\d{4})/);
+      // Formato: "24 de março de 2026" (\\S+ pois \\w nao pega acentos como ç)
+      const m = text.match(/(\\d{1,2})\\s+de\\s+(\\S+)\\s+de\\s+(\\d{4})/);
       if (m) {
         const dia = m[1].padStart(2, '0');
         const mes = meses[m[2].toLowerCase()];
@@ -259,24 +259,26 @@ async function getCurrentDate() {
 }
 
 /**
- * Navega para uma data especifica usando prev/next.
- * Em "Lista do dia", cada click avanca/retrocede 1 dia.
+ * Navega para uma data (ou a mais proxima disponivel).
+ * O calendario ZenFisio pula finais de semana, entao a data exata
+ * pode nao existir. Aceita a primeira data <= alvo (se retrocedendo)
+ * ou >= alvo (se avancando).
  */
 async function navigateToDate(targetDateStr) {
   const target = new Date(targetDateStr + 'T12:00:00');
   let attempts = 0;
-  const maxAttempts = 400; // maximo ~1 ano de navegacao
+  const maxAttempts = 400;
+  let lastDate = '';
 
   while (attempts < maxAttempts) {
-    if (shouldStop) return false;
+    if (shouldStop) return null;
 
     const currentStr = await getCurrentDate();
     if (!currentStr) {
-      // Pode ser dia sem agendamentos - checar titulo
       const title = await getText(SEL.dateTitle);
-      log(`  Dia sem agendamentos (titulo: ${title}). Avancando...`, 'info');
-      await clickEl(SEL.nextDay);
-      await sleep(800);
+      log(`  Nao conseguiu parsear data (titulo: ${title}).`, 'warn');
+      await clickEl(SEL.prevDay);
+      await sleep(600);
       attempts++;
       continue;
     }
@@ -284,19 +286,48 @@ async function navigateToDate(targetDateStr) {
     const current = new Date(currentStr + 'T12:00:00');
     const diffDays = Math.round((target - current) / (1000 * 60 * 60 * 24));
 
-    if (diffDays === 0) return true;
+    // Chegou na data exata
+    if (diffDays === 0) return currentStr;
 
-    if (diffDays > 0) {
+    // Detectar overshoot: ja passou do alvo
+    // Se estava indo pra tras e agora esta antes do alvo, voltar um dia
+    // Se estava indo pra frente e agora esta depois do alvo, ja esta ok
+    if (diffDays > 0 && lastDate && lastDate > targetDateStr && currentStr < targetDateStr) {
+      // Oscilando - aceitar a proxima disponivel apos o alvo
       await clickEl(SEL.nextDay);
-    } else {
-      await clickEl(SEL.prevDay);
+      await sleep(600);
+      const afterStr = await getCurrentDate();
+      return afterStr || currentStr;
     }
-    await sleep(800);
+    if (diffDays < 0 && lastDate && lastDate < targetDateStr && currentStr > targetDateStr) {
+      // Oscilando - aceitar data atual (primeira >= alvo)
+      return currentStr;
+    }
+
+    // Detectar que a data nao mudou (calendario pulou, estamos presos)
+    if (currentStr === lastDate) {
+      // O calendario nao avancou - tentar mais uma vez
+      if (attempts > 2 && currentStr === lastDate) {
+        log(`  Data ${targetDateStr} nao disponivel no calendario. Usando ${currentStr}.`, 'warn');
+        return currentStr;
+      }
+    }
+
+    lastDate = currentStr;
+
+    const direction = diffDays > 0 ? SEL.nextDay : SEL.prevDay;
+    if (attempts % 10 === 0) {
+      const label = diffDays > 0 ? 'avancando' : 'retrocedendo';
+      log(`  ${label}... ${currentStr} → ${targetDateStr} (${Math.abs(diffDays)} dias)`, 'info');
+    }
+
+    await clickEl(direction);
+    await sleep(500);
     attempts++;
   }
 
   log(`Nao conseguiu navegar para ${targetDateStr} apos ${maxAttempts} tentativas`, 'error');
-  return false;
+  return null;
 }
 
 // ==================== FILTROS ====================
@@ -521,26 +552,15 @@ async function startExtraction() {
 
   const allAppointments = [];
 
-  // Gerar lista de datas
-  const dates = [];
-  const current = new Date(start + 'T00:00:00');
-  const endDate = new Date(end + 'T00:00:00');
-  while (current <= endDate) {
-    const iso = current.toISOString().split('T')[0];
-    dates.push(iso);
-    current.setDate(current.getDate() + 1);
-  }
-
-  progressTotal.textContent = `${dates.length} dias`;
-  log(`Iniciando extracao: ${dates.length} dias (${start} a ${end})`, 'info');
+  log(`Iniciando extracao: ${start} a ${end}`, 'info');
 
   // 1. Configurar filtros (selecionar todos + lista do dia)
   await setupFilters();
 
-  // 2. Navegar para a primeira data
+  // 2. Navegar para a primeira data (ou a mais proxima disponivel)
   log(`Navegando para ${start}...`);
-  const reached = await navigateToDate(start);
-  if (!reached) {
+  const firstDate = await navigateToDate(start);
+  if (!firstDate) {
     log('Nao conseguiu navegar para a data inicial.', 'error');
     running = false;
     btnStart.classList.remove('hidden');
@@ -548,38 +568,45 @@ async function startExtraction() {
     progressEl.classList.add('hidden');
     return;
   }
+  log(`Posicionado em ${firstDate}.`, 'ok');
 
-  // 3. Extrair dia a dia
-  for (let d = 0; d < dates.length; d++) {
-    if (shouldStop) {
-      log('Extracao interrompida pelo usuario.', 'warn');
+  // 3. Extrair dia a dia ate passar da data final
+  //    O calendario pula finais de semana, entao iteramos pelos dias
+  //    que o calendario realmente mostra (nao por uma lista fixa).
+  let dayCount = 0;
+
+  while (!shouldStop) {
+    const currentDate = await getCurrentDate();
+    if (!currentDate) {
+      log('Nao conseguiu determinar a data atual. Parando.', 'error');
       break;
     }
 
-    const dateStr = dates[d];
-    const [y, m, day] = dateStr.split('-');
-    statusText.textContent = `Dia ${d + 1}/${dates.length}: ${day}/${m}/${y}`;
-    log(`--- Dia ${d + 1}/${dates.length}: ${day}/${m}/${y} ---`);
-
-    // Verificar se estamos no dia correto
-    const currentDate = await getCurrentDate();
-    if (currentDate && currentDate !== dateStr) {
-      // Pode ser dia sem agendamentos - verificar pelo titulo
-      const title = await getText(SEL.dateTitle);
-      log(`  Data esperada: ${dateStr}, atual: ${currentDate || title}`, 'warn');
+    // Verificar se ja passou da data final
+    if (currentDate > end) {
+      log(`Passou da data final (${currentDate} > ${end}). Finalizando.`, 'info');
+      break;
     }
 
+    dayCount++;
+    const [y, m, day] = currentDate.split('-');
+    statusText.textContent = `Dia ${dayCount}: ${day}/${m}/${y}`;
+    log(`--- Dia ${dayCount}: ${day}/${m}/${y} ---`);
+    progressCurrent.textContent = `${dayCount}`;
+
     // Extrair agendamentos do dia
-    const dayData = await extractDay(dateStr);
+    const dayData = await extractDay(currentDate);
     allAppointments.push(...dayData);
 
     log(`  Acumulado: ${allAppointments.length} agendamentos.`);
 
-    // Avancar para proximo dia (exceto no ultimo)
-    if (d < dates.length - 1) {
-      await clickEl(SEL.nextDay);
-      await sleep(1000);
-    }
+    // Avancar para proximo dia
+    await clickEl(SEL.nextDay);
+    await sleep(800);
+  }
+
+  if (shouldStop) {
+    log('Extracao interrompida pelo usuario.', 'warn');
   }
 
   // 4. Salvar Excel
