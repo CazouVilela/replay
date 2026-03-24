@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Replay - Extrator ZenFisio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Barra de controle -->
+  <div id="toolbar">
+    <div class="toolbar-left">
+      <span class="logo">REPLAY</span>
+      <span class="separator"></span>
+      <label>De: <input type="date" id="date-start"></label>
+      <label>Ate: <input type="date" id="date-end"></label>
+    </div>
+    <div class="toolbar-right">
+      <button id="btn-start" disabled>Iniciar Extracao</button>
+      <button id="btn-stop" class="hidden">Parar</button>
+      <button id="btn-discover">Capturar DOM</button>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div id="status-bar">
+    <span id="status-text">Faca login no ZenFisio abaixo e navegue ate o calendario.</span>
+    <span id="progress" class="hidden">
+      <span id="progress-current">0</span> / <span id="progress-total">0</span>
+    </span>
+  </div>
+
+  <!-- ZenFisio webview -->
+  <webview
+    id="zenfisio"
+    src="https://app.zenfisio.com/calendar"
+    allowpopups
+  ></webview>
+
+  <!-- Painel de log -->
+  <div id="log-panel">
+    <div id="log-content"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

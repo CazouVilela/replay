@@ -1,0 +1,43 @@
+{
+  "name": "replay",
+  "version": "0.1.0",
+  "description": "Extrator de dados da agenda ZenFisio",
+  "main": "desktop/main.js",
+  "scripts": {
+    "dev": "node src/index.js",
+    "start": "electron desktop/main.js",
+    "build:win": "electron-builder --win --x64",
+    "build:linux": "electron-builder --linux --x64"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "playwright": "^1.58.2"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "ws": "^8.20.0"
+  },
+  "build": {
+    "appId": "com.cazouvilela.replay",
+    "productName": "Replay",
+    "files": [
+      "desktop/**/*",
+      "src/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "desktop/icon.ico"
+    },
+    "portable": {
+      "artifactName": "Replay-${version}.exe"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Utility"
+    }
+  }
+}

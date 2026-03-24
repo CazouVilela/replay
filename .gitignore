@@ -14,9 +14,10 @@ __pycache__/
 .env.local
 *.env.local
 
-# Builds
+# Builds (Electron)
 dist/
 build/
+*.exe
 
 # Backups de producao (dados sensiveis)
 backups/*.sql
@@ -27,6 +28,9 @@ backups/*.dump
 # Logs
 *.log
 logs/
+
+# Debug screenshots (gerados pelo scraper)
+debug/
 
 # Terminal logs (sessoes Claude Code - rotacao automatica 60 dias)
 /terminal_logs/

@@ -6,40 +6,55 @@
 
 ## Sobre o Projeto
 
-[Descricao do projeto a ser preenchida]
+Aplicacao para extrair dados da agenda do ZenFisio (https://app.zenfisio.com/calendar) e gerar planilha Excel (.xlsx) com detalhes de agendamentos.
 
 ## Informacoes Principais
 
 **Versao Atual**: v0.1.0
-**Stack**: [A definir]
-**Status**: Em desenvolvimento
+**Stack**: Electron 33 + Node 22 + ExcelJS + Playwright (CLI)
+**Status**: Funcional - extracao testada e validada (2026-03-23)
+**Repo**: https://github.com/CazouVilela/replay
 
 <!-- CHAPTER: 2 Arquitetura -->
 
 ## Arquitetura
 
 ### Stack Tecnologico
-- [A definir]
+- **Electron 33** - app desktop com webview para ZenFisio
+- **ExcelJS** - geracao de planilhas Excel
+- **Playwright** - versao CLI headless (debug)
+- **electron-builder** - build Windows (.exe) e Linux (.AppImage)
 
 ### Estrutura de Arquivos
 ```
 replay/
-├── .claude/
-│   ├── memory.md
-│   ├── commands/ → symlink
-│   ├── settings.local.json → symlink
-│   └── GUIA_AMBIENTES.md → symlink
+├── desktop/
+│   ├── main.js          # Electron main process (IPC: save-excel, save-debug)
+│   ├── preload.js       # Bridge IPC seguro
+│   ├── index.html       # UI: toolbar + webview + log panel
+│   ├── style.css        # Dark theme
+│   └── app.js           # Logica de scraping (seletores mapeados do DOM real)
+├── src/
+│   └── index.js         # Versao CLI (Playwright headless)
+├── server/
+│   └── download-server.js  # Serve .exe na porta 9080
+├── debug/
+│   ├── cdp-exec.js      # Helper para executar JS via CDP
+│   └── *.png            # Screenshots de debug
+├── dist/
+│   ├── Replay-0.1.0.exe      # Build Windows (73MB)
+│   └── Replay-0.1.0.AppImage # Build Linux (112MB)
 ├── config/
-│   ├── .env                    # Config do ambiente DESTA branch
-│   └── env.config.js           # Loader central
-├── scripts/
-│   ├── load-env.sh
-│   └── backup-prod-db.sh
-├── backups/
-├── documentacao/
-├── README.md
-└── [arquivos do projeto]
+│   ├── .env
+│   └── env.config.js
+└── scripts/
 ```
+
+### Builds
+- Windows: `npm run build:win` → `dist/Replay-0.1.0.exe`
+- Linux: `npm run build:linux` → `dist/Replay-0.1.0.AppImage`
+- Dev direto: `npm start` (requer DISPLAY)
+- Debug com CDP: `npx electron desktop/main.js --no-sandbox --remote-debugging-port=9222`
 
 <!-- CHAPTER: 3 Ambientes (CRITICO) -->
 
@@ -49,63 +64,104 @@ replay/
 
 ### Principio: Cada branch = um ambiente COMPLETAMENTE isolado
 
-Codigo, banco, servicos, portas - TUDO e independente entre branches.
-Alterar dev NAO afeta stage. Alterar stage NAO afeta producao.
-
 | Branch | Ambiente | Prefixo | DB | Backend | Frontend |
 |--------|----------|---------|-----|---------|----------|
 | dev | Desenvolvimento | dev_ | dev_replay | :5001 | :3000 |
 | stage | Pre-producao | stage_ | stage_replay | :5101 | :3100 |
 | main | Producao | *(nenhum)* | replay | :5201 | :3200 |
 
-### Regras OBRIGATORIAS de Producao
-
-1. **NUNCA editar codigo diretamente na branch main**
-2. **Commit antes de qualquer alteracao** em producao
-3. **Backup do banco** antes de alteracoes em schema/dados
-4. **Analise de impacto** apresentada e aprovada pelo usuario
-5. **Dados NAO transitam** para producao - apenas estrutura e codigo
-6. **Nada hardcoded** - todo valor de ambiente vem de `config/env.config.js`
-
-### Fluxo de Promocao (merge entre branches)
-
-```
-branch dev ──(merge)──> branch stage ──(merge + aprovacao)──> branch main
-```
-
 <!-- CHAPTER: 4 Funcionalidades -->
 
 ## Funcionalidades
 
 ### Implementadas
-- [A ser implementado]
+- Login manual no ZenFisio via webview (Cloudflare Turnstile requer humano)
+- Extracao automatica: seleciona todos profissionais, lista do dia, navega por datas
+- Extrai: data, horario, profissional, especialidade, paciente, valor, pago, data pgto
+- Geracao de planilha Excel (.xlsx) com formatacao e filtros
+- Servidor de download em replay.sistema.cloud (Cloudflare tunnel)
+- Build para Windows (.exe) e Linux (.AppImage)
 
-### Em Desenvolvimento
-- [A ser planejado]
+### Fluxo de Extracao
+1. Usuario faz login manual (Turnstile impede bot)
+2. Seleciona periodo (data inicio/fim)
+3. App clica "Selecionar todos" profissionais
+4. Muda para view "Lista do dia"
+5. Para cada dia: clica cada evento → popover → editar → extrai campos do modal
+6. Gera Excel no final
 
-<!-- CHAPTER: 5 Configuracoes -->
+<!-- CHAPTER: 5 Seletores ZenFisio (CRITICO) -->
 
-## Configuracoes
+## Seletores do DOM ZenFisio (mapeados 2026-03-23)
 
-**Configuracao do ambiente**: `config/.env` (diferente em cada branch)
-**Loader**: `config/env.config.js`
-**Branch atual**: verificar com `git branch --show-current`
+**IMPORTANTE**: Os `name` dos inputs sao RANDOMIZADOS (anti-scraping). Usar SEMPRE `id`.
+**IMPORTANTE**: Existem note-popovers do Summernote. Filtrar popover por `textContent.includes('Paciente')`.
+
+| Elemento | Seletor |
+|----------|---------|
+| Selecionar todos profissionais | `a.select-all-users-calendar` |
+| Lista do dia | `.fc-listDay-button` |
+| Eventos na lista | `tr.fc-list-event` |
+| Tempo do evento | `td.fc-list-event-time` |
+| Titulo do evento | `td.fc-list-event-title a` |
+| Cabecalho do dia | `tr.fc-list-day` (attr `data-date`) |
+| Popover agendamento | `.popover.in` (filtrar: contem "Paciente", nao e note-popover) |
+| Link paciente | `a[href*="/patients/"]` |
+| Botao editar | `a.btn-edit-event` |
+| Modal edicao | `#modalScheduling` (classe `in` quando visivel) |
+| Data | `#datepicker` |
+| Hora inicio | `#start` |
+| Hora fim | `#end` |
+| Profissional | `#user` (select2, formato: "Nome (Especialidade)") |
+| Paciente | `#autocomplete_patient_calendar` |
+| Valor | `#value` (formato: "150,00") |
+| Pago | `#paid_out` (checkbox) |
+| Data pagamento | `#date_payment` |
+| Fechar modal | `#modalScheduling [data-dismiss="modal"]` |
+| Dia anterior | `.fc-prev-button` |
+| Proximo dia | `.fc-next-button` |
 
 <!-- CHAPTER: 6 Troubleshooting -->
 
 ## Troubleshooting
 
-### Problema 1
-[A documentar conforme problemas aparecerem]
+### Cloudflare Turnstile
+- Headless Playwright NAO passa no Turnstile
+- Electron funciona porque e Chromium real com interacao manual
+- Sessao persiste em cookies do Electron (reiniciar app NAO perde login)
+
+### Debug no Linux
+- Rodar com `--remote-debugging-port=9222` para inspecionar via CDP
+- Helper: `debug/cdp-exec.js` executa JS no webview via WebSocket
+- Uso: `node debug/cdp-exec.js "ws://localhost:9222/devtools/page/ID" "codigo_js"`
+
+### Multiplos Popovers
+- ZenFisio usa Summernote (editor rich text) que cria note-popovers
+- Ao buscar `.popover.in`, filtrar por conteudo (deve ter "Paciente")
 
 <!-- CHAPTER: 7 Proximas Features -->
 
 ## Proximas Funcionalidades
 
-- [ ] [Feature 1]
-- [ ] [Feature 2]
+- [ ] Melhorar navegacao de datas (usar FullCalendar API se possivel)
+- [ ] Tratar dias sem agendamentos na navegacao
+- [ ] Adicionar barra de progresso visual
+- [ ] Salvar Excel automaticamente (sem dialogo) na versao CLI
 
-<!-- CHAPTER: 8 Referencias -->
+<!-- CHAPTER: 8 Infra -->
+
+## Infraestrutura
+
+### Servidor de Download
+- Systemd: `replay-download.service`
+- URL: https://replay.sistema.cloud
+- Rota no Cloudflare tunnel config (local + remoto)
+
+### Cloudflare
+- Tunnel config remota sobrescreve local - atualizar AMBAS
+- Token CF_API_TOKEN tem permissao para atualizar config via API
+
+<!-- CHAPTER: 9 Referencias -->
 
 ## Referencias
 
@@ -117,4 +173,4 @@ branch dev ──(merge)──> branch stage ──(merge + aprovacao)──> br
 
 **Ultima Atualizacao**: 2026-03-23
 **Versao**: 0.1.0
-**Status**: Em desenvolvimento
+**Status**: Funcional - extracao validada
