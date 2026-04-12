@@ -79,58 +79,75 @@ function getOAuthToken() {
 /**
  * Chama a API Anthropic diretamente com OAuth token.
  * Uma unica chamada com imagem base64 — igual ao app desktop.
+ * Retry automatico em caso de rate limit (429), como o Claude Code faz.
  */
 async function processOcr(imageBuffer, mimeType) {
   const token = getOAuthToken();
   const b64 = imageBuffer.toString('base64');
-
-  const startTime = Date.now();
-  console.log('[OCR] Chamando API direta (Opus)...');
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'oauth-2025-04-20',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      model: 'claude-opus-4-20250514',
-      max_tokens: 4096,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mimeType, data: b64 } },
-          { type: 'text', text: PROMPT_OCR },
-        ],
-      }],
-    }),
+  const body = JSON.stringify({
+    model: 'claude-opus-4-20250514',
+    max_tokens: 4096,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: mimeType, data: b64 } },
+        { type: 'text', text: PROMPT_OCR },
+      ],
+    }],
   });
 
-  const result = await response.json();
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-  if (result.error) {
-    console.error(`[OCR] Erro API (${elapsed}s):`, result.error);
-    throw new Error(result.error.message || JSON.stringify(result.error));
-  }
-
-  console.log(`[OCR] API respondeu em ${elapsed}s`);
-
-  const text = result.content[0].text;
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    console.error('[OCR] Resposta sem JSON:', text.substring(0, 300));
-    throw new Error('Resposta nao contem JSON valido');
-  }
-
-  const ocrData = JSON.parse(jsonMatch[0]);
-  ocrData._meta = {
-    tempoProcessamento: `${elapsed}s`,
-    modelo: result.model,
+  const headers = {
+    'Content-Type': 'application/json',
+    'anthropic-version': '2023-06-01',
+    'anthropic-beta': 'oauth-2025-04-20',
+    'Authorization': `Bearer ${token}`,
   };
-  return ocrData;
+
+  const startTime = Date.now();
+  const maxRetries = 5;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    console.log(`[OCR] Chamando API (Opus)... tentativa ${attempt}/${maxRetries}`);
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', headers, body,
+    });
+
+    const result = await response.json();
+
+    if (result.error) {
+      if (result.error.type === 'rate_limit_error' && attempt < maxRetries) {
+        const wait = Math.min(attempt * 5, 30);
+        console.log(`[OCR] Rate limit. Aguardando ${wait}s antes de retentar...`);
+        await new Promise(r => setTimeout(r, wait * 1000));
+        lastError = result.error;
+        continue;
+      }
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.error(`[OCR] Erro API (${elapsed}s):`, result.error);
+      throw new Error(result.error.message || JSON.stringify(result.error));
+    }
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[OCR] API respondeu em ${elapsed}s (tentativa ${attempt})`);
+
+    const text = result.content[0].text;
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('[OCR] Resposta sem JSON:', text.substring(0, 300));
+      throw new Error('Resposta nao contem JSON valido');
+    }
+
+    const ocrData = JSON.parse(jsonMatch[0]);
+    ocrData._meta = {
+      tempoProcessamento: `${elapsed}s`,
+      modelo: result.model,
+    };
+    return ocrData;
+  }
+
+  throw new Error(`Rate limit persistente apos ${maxRetries} tentativas`);
 }
 
 // ==================== ROTAS ====================
