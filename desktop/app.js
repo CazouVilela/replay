@@ -777,16 +777,28 @@ function displayOcrResults(result) {
     tdNum.style.color = '#555';
     tr.appendChild(tdNum);
 
-    // Data (editavel)
+    // Helper: marcar incerteza (campo com ?) e detectar edicao
+    function setupCell(td, value) {
+      if (typeof value === 'string' && value.endsWith('?')) {
+        td.classList.add('ocr-incerto');
+      }
+      td.contentEditable = 'true';
+      td.addEventListener('input', () => {
+        td.classList.remove('ocr-incerto');
+        td.classList.add('ocr-editado');
+      });
+    }
+
+    // Data
     const tdData = document.createElement('td');
     tdData.textContent = reg.data;
-    tdData.contentEditable = 'true';
+    setupCell(tdData, reg.data);
     tr.appendChild(tdData);
 
-    // Modalidade (editavel)
+    // Modalidade
     const tdMod = document.createElement('td');
     tdMod.textContent = reg.modalidade;
-    tdMod.contentEditable = 'true';
+    setupCell(tdMod, reg.modalidade);
     tr.appendChild(tdMod);
 
     // Assinatura (Sim/Nao) — clicavel para toggle
@@ -799,6 +811,7 @@ function displayOcrResults(result) {
       const isSim = tdAss.textContent === 'Sim';
       tdAss.textContent = isSim ? 'Nao' : 'Sim';
       tdAss.className = isSim ? 'ocr-assinatura-nao' : 'ocr-assinatura-sim';
+      tdAss.classList.add('ocr-editado');
     });
     tr.appendChild(tdAss);
 

@@ -243,6 +243,16 @@ button {
   color: #f39c12;
 }
 
+/* Campo incerto (modelo nao tem certeza - marcado com ?) */
+.ocr-incerto {
+  background: rgba(231, 76, 60, 0.2) !important;
+}
+
+/* Campo editado pelo usuario */
+.ocr-editado {
+  background: rgba(241, 196, 15, 0.2) !important;
+}
+
 /* Loading state para o label OCR */
 .file-label.processing {
   border-color: #f39c12;

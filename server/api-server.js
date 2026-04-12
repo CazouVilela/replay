@@ -81,8 +81,8 @@ Extraia TODAS as linhas visiveis da tabela. Retorne APENAS um JSON (sem markdown
 }
 
 Regras adicionais:
-- Datas ilegiveis: use melhor julgamento, marque com "?" no final
-- Modalidades: use a abreviacao visivel (TO, FONO, etc.)
+- Datas: formato DD/MM/AAAA. Se nao tiver certeza da leitura, adicione "?" no final (ex: "26/01/2025?")
+- Modalidades: use a abreviacao visivel (TO, FONO, etc.). Se nao tiver certeza, adicione "?" (ex: "TO?")
 - Ignore linhas completamente vazias (sem data E sem assinatura)
 - Retorne APENAS o JSON puro`;
 
