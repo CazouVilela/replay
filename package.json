@@ -1,6 +1,6 @@
 {
   "name": "replay",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Extrator de dados da agenda ZenFisio",
   "main": "desktop/main.js",
   "scripts": {

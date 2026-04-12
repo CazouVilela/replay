@@ -236,7 +236,7 @@ ipcMain.handle('process-ocr-image', async (event, { data, mimeType, fileName }) 
 
   // Config do backend
   const apiUrl = process.env.REPLAY_API_URL || 'https://replay-api.sistema.cloud';
-  const apiToken = process.env.REPLAY_API_TOKEN || '';
+  const apiToken = process.env.REPLAY_API_TOKEN || 'e0325b3833bc94fdf13560613ceafc9f292ead2dd7a736d5db0f9f96d60b7c5c';
 
   const buffer = Buffer.from(data);
 
