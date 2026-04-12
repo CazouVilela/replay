@@ -150,3 +150,102 @@ button {
 .log-ok { color: #2ecc71; }
 .log-warn { color: #f39c12; }
 .log-error { color: #e74c3c; }
+
+/* OCR Results panel */
+#ocr-results-panel {
+  background: #0d1117;
+  border-top: 1px solid #0f3460;
+  flex-shrink: 0;
+  max-height: 250px;
+  display: flex;
+  flex-direction: column;
+}
+
+#ocr-results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 12px;
+  background: #16213e;
+  border-bottom: 1px solid #0f3460;
+  flex-shrink: 0;
+}
+
+#ocr-results-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7ec8e3;
+}
+
+#ocr-results-actions {
+  display: flex;
+  gap: 8px;
+}
+
+#ocr-results-actions button {
+  background: transparent;
+  border: 1px solid #333;
+  color: #8b949e;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+#ocr-results-actions button:hover { color: #eee; border-color: #555; }
+
+#ocr-results-body {
+  overflow-y: auto;
+  flex: 1;
+}
+
+#ocr-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+#ocr-results-table th {
+  background: #161b22;
+  color: #7ec8e3;
+  font-weight: 600;
+  padding: 4px 10px;
+  text-align: left;
+  position: sticky;
+  top: 0;
+  border-bottom: 1px solid #0f3460;
+}
+
+#ocr-results-table td {
+  padding: 3px 10px;
+  color: #c9d1d9;
+  border-bottom: 1px solid #1a2233;
+}
+
+#ocr-results-table tr:nth-child(even) td {
+  background: rgba(255,255,255,0.02);
+}
+
+#ocr-results-table tr:hover td {
+  background: rgba(56,139,253,0.08);
+}
+
+#ocr-results-table td[contenteditable="true"]:focus {
+  outline: 1px solid #3498db;
+  background: rgba(56,139,253,0.12);
+}
+
+/* Indicador de assinatura */
+.ocr-assinatura-sim {
+  color: #2ecc71;
+  font-weight: 600;
+}
+.ocr-assinatura-nao {
+  color: #f39c12;
+}
+
+/* Loading state para o label OCR */
+.file-label.processing {
+  border-color: #f39c12;
+  color: #f39c12;
+  pointer-events: none;
+}

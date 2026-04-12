@@ -228,6 +228,70 @@ ipcMain.handle('load-price-table', async (event, fileData) => {
   };
 });
 
+// IPC: OCR de ficha de frequencia (via backend API)
+ipcMain.handle('process-ocr-image', async (event, { data, mimeType, fileName }) => {
+  const FormData = require('form-data');
+  const http = require('http');
+  const https = require('https');
+
+  // Config do backend
+  const apiUrl = process.env.REPLAY_API_URL || 'https://replay-api.sistema.cloud';
+  const apiToken = process.env.REPLAY_API_TOKEN || '';
+
+  const buffer = Buffer.from(data);
+
+  // Determinar extensao do mimetype
+  const extMap = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
+  const ext = extMap[mimeType] || '.jpg';
+
+  // Construir multipart/form-data manualmente (sem dep extra no Electron)
+  const boundary = '----ReplayOCR' + Date.now();
+  const header = [
+    `--${boundary}`,
+    `Content-Disposition: form-data; name="imagem"; filename="${fileName || 'ficha' + ext}"`,
+    `Content-Type: ${mimeType || 'image/jpeg'}`,
+    '',
+    '',
+  ].join('\r\n');
+  const footer = `\r\n--${boundary}--\r\n`;
+
+  const bodyParts = [Buffer.from(header), buffer, Buffer.from(footer)];
+  const body = Buffer.concat(bodyParts);
+
+  return new Promise((resolve, reject) => {
+    const url = new URL(apiUrl + '/api/ocr');
+    const transport = url.protocol === 'https:' ? https : http;
+
+    const req = transport.request({
+      hostname: url.hostname,
+      port: url.port || (url.protocol === 'https:' ? 443 : 80),
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': body.length,
+        'Authorization': `Bearer ${apiToken}`,
+      },
+    }, (res) => {
+      let responseData = '';
+      res.on('data', chunk => { responseData += chunk; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(responseData);
+          resolve(parsed);
+        } catch {
+          reject(new Error(`Resposta invalida do servidor: ${responseData.substring(0, 200)}`));
+        }
+      });
+    });
+
+    req.on('error', (err) => reject(new Error(`Erro de conexao: ${err.message}`)));
+    req.setTimeout(600000, () => { req.destroy(); reject(new Error('Timeout: OCR demorou mais de 10 minutos')); });
+    req.write(body);
+    req.end();
+  });
+});
+
 // IPC: Capturar DOM para debug
 ipcMain.handle('save-debug', async (event, { filename, content }) => {
   const debugDir = path.join(app.getPath('userData'), 'debug');

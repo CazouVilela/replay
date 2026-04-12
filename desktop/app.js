@@ -17,6 +17,13 @@ const logContent = document.getElementById('log-content');
 const priceTableInput = document.getElementById('price-table');
 const priceTableLabel = document.getElementById('price-table-label');
 
+const ocrUploadInput = document.getElementById('ocr-upload');
+const ocrUploadLabel = document.getElementById('ocr-upload-label');
+const ocrResultsPanel = document.getElementById('ocr-results-panel');
+const ocrResultsTitle = document.getElementById('ocr-results-title');
+const ocrResultsTbody = document.getElementById('ocr-results-tbody');
+const btnOcrClose = document.getElementById('btn-ocr-close');
+
 let running = false;
 let shouldStop = false;
 // Tabela de precos: { priceMap: { paciente_lower: { especialidade_lower: valor } }, specialties: [] }
@@ -748,5 +755,104 @@ const today = new Date();
 const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
 dateStart.value = firstDay.toISOString().split('T')[0];
 dateEnd.value = today.toISOString().split('T')[0];
+
+// ==================== OCR DE FICHAS ====================
+
+/**
+ * Exibe os resultados do OCR no painel.
+ */
+function displayOcrResults(result) {
+  const { paciente, periodo, registros } = result;
+
+  ocrResultsTitle.textContent = `Frequencia: ${paciente} — ${periodo} (${registros.length} registros)`;
+  ocrResultsTbody.innerHTML = '';
+
+  for (let i = 0; i < registros.length; i++) {
+    const reg = registros[i];
+    const tr = document.createElement('tr');
+
+    // Numero da linha
+    const tdNum = document.createElement('td');
+    tdNum.textContent = i + 1;
+    tdNum.style.color = '#555';
+    tr.appendChild(tdNum);
+
+    // Data (editavel)
+    const tdData = document.createElement('td');
+    tdData.textContent = reg.data;
+    tdData.contentEditable = 'true';
+    tr.appendChild(tdData);
+
+    // Modalidade (editavel)
+    const tdMod = document.createElement('td');
+    tdMod.textContent = reg.modalidade;
+    tdMod.contentEditable = 'true';
+    tr.appendChild(tdMod);
+
+    // Assinatura (Sim/Nao) — clicavel para toggle
+    const tdAss = document.createElement('td');
+    tdAss.textContent = reg.assinatura ? 'Sim' : 'Nao';
+    tdAss.className = reg.assinatura ? 'ocr-assinatura-sim' : 'ocr-assinatura-nao';
+    tdAss.style.cursor = 'pointer';
+    tdAss.title = 'Clique para alternar Sim/Nao';
+    tdAss.addEventListener('click', () => {
+      const isSim = tdAss.textContent === 'Sim';
+      tdAss.textContent = isSim ? 'Nao' : 'Sim';
+      tdAss.className = isSim ? 'ocr-assinatura-nao' : 'ocr-assinatura-sim';
+    });
+    tr.appendChild(tdAss);
+
+    ocrResultsTbody.appendChild(tr);
+  }
+
+  ocrResultsPanel.classList.remove('hidden');
+}
+
+// Upload de imagem OCR
+ocrUploadInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  try {
+    ocrUploadLabel.classList.add('processing');
+    ocrUploadLabel.textContent = 'Processando OCR...';
+    log(`Enviando imagem para OCR: ${file.name} (${(file.size / 1024).toFixed(0)} KB)...`);
+
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8 = Array.from(new Uint8Array(arrayBuffer));
+
+    const result = await window.api.processOcrImage({
+      data: uint8,
+      mimeType: file.type,
+      fileName: file.name,
+    });
+
+    if (result.success && result.data) {
+      const { data } = result;
+      const totalAss = data.registros.filter(r => r.assinatura).length;
+      log(`OCR concluido: ${data.paciente} — ${data.registros.length} registros, ${totalAss} assinados (${data._meta?.tempoProcessamento || '?'})`, 'ok');
+      displayOcrResults(data);
+      ocrUploadLabel.classList.remove('processing');
+      ocrUploadLabel.classList.add('loaded');
+      ocrUploadLabel.textContent = `${file.name} (${data.registros.length} linhas)`;
+    } else {
+      throw new Error(result.error || 'Resposta invalida do servidor');
+    }
+  } catch (err) {
+    log(`Erro OCR: ${err.message}`, 'error');
+    ocrUploadLabel.classList.remove('processing');
+    ocrUploadLabel.textContent = 'Frequencia (OCR)';
+  }
+
+  // Reset do input para permitir reenvio do mesmo arquivo
+  ocrUploadInput.value = '';
+});
+
+// Fechar painel OCR
+btnOcrClose.addEventListener('click', () => {
+  ocrResultsPanel.classList.add('hidden');
+  ocrUploadLabel.classList.remove('loaded');
+  ocrUploadLabel.textContent = 'Frequencia (OCR)';
+});
 
 log('Replay iniciado. Aguardando login no ZenFisio...');

@@ -7,10 +7,14 @@
     "dev": "node src/index.js",
     "start": "electron desktop/main.js",
     "build:win": "electron-builder --win --x64",
-    "build:linux": "electron-builder --linux --x64"
+    "build:linux": "electron-builder --linux --x64",
+    "server": "node server/api-server.js"
   },
   "dependencies": {
+    "cors": "^2.8.6",
     "exceljs": "^4.4.0",
+    "express": "^5.2.1",
+    "multer": "^2.1.1",
     "playwright": "^1.58.2"
   },
   "devDependencies": {

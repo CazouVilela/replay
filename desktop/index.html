@@ -19,6 +19,11 @@
         Tabela de Precos
         <input type="file" id="price-table" accept=".xlsx,.xls">
       </label>
+      <span class="separator"></span>
+      <label class="file-label" id="ocr-upload-label">
+        Frequencia (OCR)
+        <input type="file" id="ocr-upload" accept="image/jpeg,image/png,image/webp">
+      </label>
     </div>
     <div class="toolbar-right">
       <button id="btn-start" disabled>Iniciar Extracao</button>
@@ -41,6 +46,29 @@
     src="https://app.zenfisio.com/calendar"
     allowpopups
   ></webview>
+
+  <!-- Painel de resultados OCR -->
+  <div id="ocr-results-panel" class="hidden">
+    <div id="ocr-results-header">
+      <span id="ocr-results-title">Frequencia de Terapias</span>
+      <div id="ocr-results-actions">
+        <button id="btn-ocr-close" title="Fechar">✕</button>
+      </div>
+    </div>
+    <div id="ocr-results-body">
+      <table id="ocr-results-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Data</th>
+            <th>Modalidade</th>
+            <th>Assinatura</th>
+          </tr>
+        </thead>
+        <tbody id="ocr-results-tbody"></tbody>
+      </table>
+    </div>
+  </div>
 
   <!-- Painel de log -->
   <div id="log-panel">
