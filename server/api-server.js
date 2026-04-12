@@ -98,7 +98,7 @@ function executeClaude(imagePath) {
     const args = [
       '-p',
       '--output-format', 'json',
-      '--model', 'opus',
+      '--model', 'sonnet',
       '--tools', 'Read',
       '--no-chrome',
       '--mcp-config', '{"mcpServers":{}}',
@@ -209,6 +209,7 @@ app.get('/health', (req, res) => {
 });
 
 // OCR de ficha de frequencia
+// Envia keepalive (espacos) a cada 15s para evitar timeout 524 do Cloudflare
 app.post('/api/ocr', authMiddleware, upload.single('imagem'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, error: 'Nenhuma imagem enviada. Use o campo "imagem".' });
@@ -217,14 +218,20 @@ app.post('/api/ocr', authMiddleware, upload.single('imagem'), async (req, res) =
   const tempPath = req.file.path;
   console.log(`[OCR] Recebido: ${req.file.originalname} (${(req.file.size / 1024).toFixed(0)} KB, ${req.file.mimetype})`);
 
+  // Iniciar resposta chunked com keepalive para evitar Cloudflare 524
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('X-Accel-Buffering', 'no');
+  const keepalive = setInterval(() => { res.write(' '); }, 15000);
+
   try {
     const data = await executeClaude(tempPath);
-    res.json({ success: true, data });
+    clearInterval(keepalive);
+    res.end(JSON.stringify({ success: true, data }));
   } catch (err) {
+    clearInterval(keepalive);
     console.error(`[OCR] Falha: ${err.message}`);
-    res.status(500).json({ success: false, error: err.message });
+    res.end(JSON.stringify({ success: false, error: err.message }));
   } finally {
-    // Limpar arquivo temporario
     fs.unlink(tempPath, () => {});
   }
 });
