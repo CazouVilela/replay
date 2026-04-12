@@ -56,35 +56,20 @@ function authMiddleware(req, res, next) {
 }
 
 // Prompt OCR para o Claude CLI
-const PROMPT_OCR = `Voce esta analisando uma foto de uma ficha de "Frequencia de Terapias" da clinica Replay - Reabilitar Brincando LTDA.
+const PROMPT_OCR = `Faca o OCR da tabela nessa imagem e retorne os dados como JSON.
 
-A ficha e uma tabela impressa preenchida a mao com as colunas:
-1. Nome - nome do paciente (geralmente o mesmo em todas as linhas, impresso)
-2. Data - data do atendimento (DD/MM/AAAA, escrita a mao em caneta)
-3. Modalidade - tipo de terapia (ex: TO, FONO, PSICO - geralmente impresso ou carimbado)
-4. Assinatura do responsavel - campo onde o responsavel assina a mao
+Na coluna assinatura: true se existe uma assinatura, false se nao existe.
+Se nao tiver certeza de algum campo, adicione "?" no final do valor.
 
-SOBRE A COLUNA ASSINATURA:
-A coluna "Assinatura do responsavel" e a ultima coluna da tabela.
-Analise e SIMPLES: a celula TEM algo escrito ou esta EM BRANCO.
-- true = tem qualquer coisa escrita na celula (assinatura, rubrica, nome, rabisco)
-- false = celula vazia, em branco, nada escrito
-
-Extraia TODAS as linhas visiveis da tabela. Retorne APENAS um JSON (sem markdown, sem texto adicional):
+Retorne APENAS o JSON puro, sem markdown e sem texto adicional:
 
 {
   "paciente": "nome do paciente",
   "periodo": "MM/AAAA a MM/AAAA",
   "registros": [
-    {"data": "DD/MM/AAAA", "modalidade": "XX", "assinatura": true}
+    {"data": "DD/MM/AAAA", "modalidade": "texto visivel", "assinatura": true}
   ]
-}
-
-Regras adicionais:
-- Datas: formato DD/MM/AAAA. Se nao tiver certeza da leitura, adicione "?" no final (ex: "26/01/2025?")
-- Modalidades: use a abreviacao visivel (TO, FONO, etc.). Se nao tiver certeza, adicione "?" (ex: "TO?")
-- Ignore linhas completamente vazias (sem data E sem assinatura)
-- Retorne APENAS o JSON puro`;
+}`;
 
 /**
  * Executa o Claude CLI para processar OCR de uma imagem.
@@ -98,7 +83,7 @@ function executeClaude(imagePath) {
     const args = [
       '-p',
       '--output-format', 'json',
-      '--model', 'sonnet',
+      '--model', 'opus',
       '--tools', 'Read',
       '--no-chrome',
       '--mcp-config', '{"mcpServers":{}}',
