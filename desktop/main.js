@@ -230,7 +230,6 @@ ipcMain.handle('load-price-table', async (event, fileData) => {
 
 // IPC: OCR de ficha de frequencia (via backend API)
 ipcMain.handle('process-ocr-image', async (event, { data, mimeType, fileName }) => {
-  const FormData = require('form-data');
   const http = require('http');
   const https = require('https');
 

@@ -1,6 +1,6 @@
 {
   "name": "replay",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Extrator de dados da agenda ZenFisio",
   "main": "desktop/main.js",
   "scripts": {
@@ -37,6 +37,7 @@
       "icon": "desktop/icon.ico"
     },
     "nsis": {
+      "guid": "com.cazouvilela.replay",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "artifactName": "Replay-Setup-${version}.exe",
