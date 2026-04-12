@@ -1,5 +1,5 @@
 // server/download-server.js
-// Servidor minimo para servir o Replay.exe para download
+// Servidor para servir builds do Replay para download
 // Roda em http://localhost:9080
 
 const http = require('http');
@@ -9,17 +9,17 @@ const path = require('path');
 const PORT = 9080;
 const DIST_DIR = path.join(__dirname, '..', 'dist');
 
-function getLatestExe() {
-  if (!fs.existsSync(DIST_DIR)) return null;
-  const files = fs.readdirSync(DIST_DIR).filter(f => f.endsWith('.exe') && !f.includes('uninstaller'));
-  if (files.length === 0) return null;
-  // Pegar o mais recente
+function getAllExes() {
+  if (!fs.existsSync(DIST_DIR)) return [];
+  const files = fs.readdirSync(DIST_DIR)
+    .filter(f => f.endsWith('.exe') && f.includes('Setup') && !f.includes('uninstaller'));
+  // Ordenar por data (mais recente primeiro)
   files.sort((a, b) => {
     const sa = fs.statSync(path.join(DIST_DIR, a));
     const sb = fs.statSync(path.join(DIST_DIR, b));
     return sb.mtimeMs - sa.mtimeMs;
   });
-  return files[0];
+  return files;
 }
 
 function formatSize(bytes) {
@@ -29,23 +29,53 @@ function formatSize(bytes) {
   return bytes + ' B';
 }
 
-function renderPage(exeFile) {
+function extractVersion(filename) {
+  const m = filename.match(/(\d+\.\d+\.\d+)/);
+  return m ? m[1] : '?';
+}
+
+function renderPage() {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
-  let fileInfo = '';
-  if (exeFile) {
-    const stat = fs.statSync(path.join(DIST_DIR, exeFile));
-    fileInfo = `
+  const allExes = getAllExes();
+  const latest = allExes[0] || null;
+  const older = allExes.slice(1);
+
+  let latestHtml = '';
+  if (latest) {
+    const stat = fs.statSync(path.join(DIST_DIR, latest));
+    latestHtml = `
       <div class="file-info">
-        <div class="file-name">${exeFile}</div>
+        <div class="file-name">${latest}</div>
         <div class="file-meta">${formatSize(stat.size)} &middot; ${stat.mtime.toLocaleDateString('pt-BR')}</div>
       </div>
-      <a href="/download" class="btn-download">Baixar Replay</a>
-      <div style="margin-top:16px">
-        <a href="/instalador" class="btn-installer">Baixar Instalador/Atualizador (.bat)</a>
-      </div>
+      <a href="/download/${encodeURIComponent(latest)}" class="btn-download">Baixar Replay v${extractVersion(latest)}</a>
     `;
   } else {
-    fileInfo = '<p class="no-file">Nenhum build disponivel.</p>';
+    latestHtml = '<p class="no-file">Nenhum build disponivel.</p>';
+  }
+
+  let olderHtml = '';
+  if (older.length > 0) {
+    const rows = older.map(f => {
+      const stat = fs.statSync(path.join(DIST_DIR, f));
+      const ver = extractVersion(f);
+      return `
+        <tr>
+          <td>v${ver}</td>
+          <td>${stat.mtime.toLocaleDateString('pt-BR')}</td>
+          <td>${formatSize(stat.size)}</td>
+          <td><a href="/download/${encodeURIComponent(f)}">Baixar</a></td>
+        </tr>`;
+    }).join('');
+
+    olderHtml = `
+      <div class="older-section">
+        <div class="older-title">Versoes anteriores</div>
+        <table class="older-table">
+          <thead><tr><th>Versao</th><th>Data</th><th>Tamanho</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
   }
 
   return `<!DOCTYPE html>
@@ -70,7 +100,7 @@ function renderPage(exeFile) {
       border-radius: 16px;
       padding: 48px;
       text-align: center;
-      max-width: 420px;
+      max-width: 480px;
       width: 90%;
       box-shadow: 0 8px 32px rgba(0,0,0,0.3);
     }
@@ -118,13 +148,42 @@ function renderPage(exeFile) {
       transition: background 0.2s;
     }
     .btn-download:hover { background: #27ae60; }
-    .btn-installer {
-      color: #7ec8e3;
-      font-size: 12px;
-      text-decoration: underline;
-    }
-    .btn-installer:hover { color: #fff; }
     .no-file { color: #e74c3c; }
+    .older-section {
+      margin-top: 32px;
+      text-align: left;
+    }
+    .older-title {
+      font-size: 12px;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    .older-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .older-table th {
+      color: #555;
+      font-weight: 600;
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid #0f3460;
+    }
+    .older-table td {
+      padding: 6px 8px;
+      color: #8b949e;
+      border-bottom: 1px solid #0d1117;
+    }
+    .older-table a {
+      color: #7ec8e3;
+      text-decoration: none;
+      font-size: 12px;
+    }
+    .older-table a:hover { color: #fff; text-decoration: underline; }
     .footer {
       margin-top: 32px;
       color: #444;
@@ -137,47 +196,43 @@ function renderPage(exeFile) {
     <div class="logo">REPLAY</div>
     <div class="subtitle">Extrator de Agenda ZenFisio</div>
     <div class="version">v${pkg.version}</div>
-    ${fileInfo}
-    <div class="footer">Windows 10/11 &middot; Instalador com wizard e limpeza de cache automatica</div>
+    ${latestHtml}
+    ${olderHtml}
+    <div class="footer">Windows 10/11 &middot; Instalador com wizard</div>
   </div>
 </body>
 </html>`;
 }
 
 const server = http.createServer((req, res) => {
-  const exeFile = getLatestExe();
-
-  if (req.url === '/download' && exeFile) {
-    const filePath = path.join(DIST_DIR, exeFile);
+  // Download de um arquivo especifico: /download/Replay-Setup-1.0.0.exe
+  if (req.url.startsWith('/download/')) {
+    const fileName = decodeURIComponent(req.url.slice('/download/'.length));
+    // Sanitizar: apenas permitir arquivos .exe dentro de dist/
+    if (!fileName.match(/^Replay[\w\-. ]+\.exe$/) || fileName.includes('..')) {
+      res.writeHead(400);
+      res.end('Nome de arquivo invalido');
+      return;
+    }
+    const filePath = path.join(DIST_DIR, fileName);
+    if (!fs.existsSync(filePath)) {
+      res.writeHead(404);
+      res.end('Arquivo nao encontrado');
+      return;
+    }
     const stat = fs.statSync(filePath);
     res.writeHead(200, {
       'Content-Type': 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${exeFile}"`,
+      'Content-Disposition': `attachment; filename="${fileName}"`,
       'Content-Length': stat.size,
     });
     fs.createReadStream(filePath).pipe(res);
     return;
   }
 
-  if (req.url === '/instalador') {
-    const batPath = path.join(DIST_DIR, 'instalar-replay.bat');
-    if (fs.existsSync(batPath)) {
-      const stat = fs.statSync(batPath);
-      res.writeHead(200, {
-        'Content-Type': 'application/octet-stream',
-        'Content-Disposition': 'attachment; filename="instalar-replay.bat"',
-        'Content-Length': stat.size,
-      });
-      fs.createReadStream(batPath).pipe(res);
-      return;
-    }
-    res.writeHead(404);
-    res.end('Instalador nao encontrado');
-    return;
-  }
-
+  // Pagina principal
   if (req.url === '/' || req.url === '/index.html') {
-    const html = renderPage(exeFile);
+    const html = renderPage();
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(html);
     return;
