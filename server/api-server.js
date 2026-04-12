@@ -56,7 +56,7 @@ function authMiddleware(req, res, next) {
 }
 
 // Prompt OCR para o Claude CLI
-const PROMPT_OCR = `{ULTRATHINK} Faca o OCR da tabela nessa imagem com maxima precisao. Analise cada linha com cuidado.
+const PROMPT_OCR = `Faca o OCR da tabela nessa imagem e retorne os dados como JSON.
 
 Na coluna assinatura: true se existe uma assinatura, false se nao existe.
 Se nao tiver certeza de algum campo, adicione "?" no final do valor.
@@ -84,7 +84,6 @@ function executeClaude(imagePath) {
       '-p',
       '--output-format', 'json',
       '--model', 'opus',
-      '--effort', 'max',
       '--tools', 'Read',
       '--no-chrome',
       '--mcp-config', '{"mcpServers":{}}',
