@@ -84,6 +84,14 @@ function getOAuthToken() {
 async function processOcr(imageBuffer, mimeType) {
   const token = getOAuthToken();
   const b64 = imageBuffer.toString('base64');
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'anthropic-version': '2023-06-01',
+    'anthropic-beta': 'oauth-2025-04-20',
+    'Authorization': `Bearer ${token}`,
+  };
+
   const body = JSON.stringify({
     model: 'claude-opus-4-20250514',
     max_tokens: 4096,
@@ -96,19 +104,11 @@ async function processOcr(imageBuffer, mimeType) {
     }],
   });
 
-  const headers = {
-    'Content-Type': 'application/json',
-    'anthropic-version': '2023-06-01',
-    'anthropic-beta': 'oauth-2025-04-20',
-    'Authorization': `Bearer ${token}`,
-  };
-
   const startTime = Date.now();
-  const maxRetries = 5;
-  let lastError = null;
+  const maxRetries = 8;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    console.log(`[OCR] Chamando API (Opus)... tentativa ${attempt}/${maxRetries}`);
+    console.log(`[OCR] Opus tentativa ${attempt}/${maxRetries}...`);
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST', headers, body,
@@ -118,10 +118,10 @@ async function processOcr(imageBuffer, mimeType) {
 
     if (result.error) {
       if (result.error.type === 'rate_limit_error' && attempt < maxRetries) {
-        const wait = Math.min(attempt * 5, 30);
-        console.log(`[OCR] Rate limit. Aguardando ${wait}s antes de retentar...`);
+        // Espera progressiva: 10, 20, 30, 40, 50, 60, 60s
+        const wait = Math.min(attempt * 10, 60);
+        console.log(`[OCR] Rate limit. Aguardando ${wait}s (tentativa ${attempt})...`);
         await new Promise(r => setTimeout(r, wait * 1000));
-        lastError = result.error;
         continue;
       }
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -130,7 +130,7 @@ async function processOcr(imageBuffer, mimeType) {
     }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[OCR] API respondeu em ${elapsed}s (tentativa ${attempt})`);
+    console.log(`[OCR] Opus respondeu em ${elapsed}s`);
 
     const text = result.content[0].text;
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -147,7 +147,7 @@ async function processOcr(imageBuffer, mimeType) {
     return ocrData;
   }
 
-  throw new Error(`Rate limit persistente apos ${maxRetries} tentativas`);
+  throw new Error('Opus com rate limit persistente. Tente novamente em alguns minutos.');
 }
 
 // ==================== ROTAS ====================
