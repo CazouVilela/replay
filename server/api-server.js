@@ -6,6 +6,7 @@
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 
@@ -14,7 +15,7 @@ require(path.join(__dirname, '..', 'config', 'env.config.js'));
 const { getCredential } = require('/home/cazouvilela/credenciais/credentials.js');
 
 const PORT = parseInt(process.env.BACKEND_PORT) || 5204;
-const API_TOKEN = getCredential('apps/replay.env', 'REPLAY_API_TOKEN');
+const SHARED_KEY = getCredential('apps/replay.env', 'REPLAY_SHARED_KEY');
 const GEMINI_KEY = getCredential('api_tokens/gemini.env', 'GEMINI_API_KEY');
 
 const app = express();
@@ -35,14 +36,20 @@ const upload = multer({
   },
 });
 
-// Middleware de autenticacao
+// Middleware de autenticacao — token rotativo HMAC
+// Aceita token da hora atual ou da hora anterior (tolerancia de clock)
 function authMiddleware(req, res, next) {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) {
     return res.status(401).json({ success: false, error: 'Token de autenticacao ausente' });
   }
-  if (auth.slice(7) !== API_TOKEN) {
-    return res.status(403).json({ success: false, error: 'Token invalido' });
+  const token = auth.slice(7);
+  const currentSlot = Math.floor(Date.now() / 3600000);
+  const validTokens = [currentSlot, currentSlot - 1].map(slot =>
+    crypto.createHmac('sha256', SHARED_KEY).update(slot.toString()).digest('hex')
+  );
+  if (!validTokens.includes(token)) {
+    return res.status(403).json({ success: false, error: 'Token invalido ou expirado' });
   }
   next();
 }

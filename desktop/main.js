@@ -234,8 +234,12 @@ ipcMain.handle('process-ocr-image', async (event, { data, mimeType, fileName }) 
   const https = require('https');
 
   // Config do backend
+  const crypto = require('crypto');
   const apiUrl = process.env.REPLAY_API_URL || 'https://replay-api.sistema.cloud';
-  const apiToken = process.env.REPLAY_API_TOKEN || 'e0325b3833bc94fdf13560613ceafc9f292ead2dd7a736d5db0f9f96d60b7c5c';
+  // Token rotativo: HMAC da chave + hora atual (muda a cada hora)
+  const SHARED_KEY = 'replay-ocr-2026-rblt';
+  const hourSlot = Math.floor(Date.now() / 3600000).toString();
+  const apiToken = crypto.createHmac('sha256', SHARED_KEY).update(hourSlot).digest('hex');
 
   const buffer = Buffer.from(data);
 
