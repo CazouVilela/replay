@@ -6,13 +6,13 @@
 
 ## Sobre o Projeto
 
-Aplicacao para extrair dados da agenda do ZenFisio (https://app.zenfisio.com/calendar) e gerar planilha Excel (.xlsx) com detalhes de agendamentos.
+Aplicacao para extrair dados da agenda do ZenFisio (https://app.zenfisio.com/calendar) e gerar planilha Excel (.xlsx) com detalhes de agendamentos. Inclui OCR de fichas de frequencia de terapias via Gemini 2.5 Flash.
 
 ## Informacoes Principais
 
-**Versao Atual**: v0.1.0
-**Stack**: Electron 33 + Node 22 + ExcelJS + Playwright (CLI)
-**Status**: Funcional - extracao testada e validada (2026-03-23)
+**Versao Atual**: v2.0.1
+**Stack**: Electron 33 + Express 5.2 + Gemini 2.5 Flash + ExcelJS + Playwright (CLI)
+**Status**: Funcional - extracao + OCR validados (2026-04-12)
 **Repo**: https://github.com/CazouVilela/replay
 
 <!-- CHAPTER: 2 Arquitetura -->
@@ -21,40 +21,63 @@ Aplicacao para extrair dados da agenda do ZenFisio (https://app.zenfisio.com/cal
 
 ### Stack Tecnologico
 - **Electron 33** - app desktop com webview para ZenFisio
-- **ExcelJS** - geracao de planilhas Excel
-- **Playwright** - versao CLI headless (debug)
-- **electron-builder** - build Windows (.exe) e Linux (.AppImage)
+- **Express 5.2.1** - backend API para OCR
+- **Gemini 2.5 Flash** - OCR de fichas de frequencia (tier gratuito Google AI Studio, 15 req/min)
+- **Multer 2.1.1** - upload de imagens no backend (ate 20MB)
+- **ExcelJS 4.4.0** - geracao de planilhas Excel
+- **Playwright 1.58.2** - versao CLI headless (debug/desenvolvimento)
+- **electron-builder 25.1.8 + NSIS** - build Windows (instalador com wizard e limpeza)
 
 ### Estrutura de Arquivos
 ```
 replay/
 ├── desktop/
-│   ├── main.js          # Electron main process (IPC: save-excel, save-debug)
-│   ├── preload.js       # Bridge IPC seguro
-│   ├── index.html       # UI: toolbar + webview + log panel
-│   ├── style.css        # Dark theme
-│   └── app.js           # Logica de scraping (seletores mapeados do DOM real)
+│   ├── main.js          # Electron main process (IPC: save-excel, load-price-table, process-ocr-image, save-debug)
+│   ├── preload.js       # Bridge IPC seguro (4 handlers expostos)
+│   ├── index.html       # UI: toolbar + webview + painel OCR + log panel
+│   ├── style.css        # Dark theme (com estilos OCR: incerteza, editado, assinatura)
+│   └── app.js           # Logica de scraping + OCR UI + validacao de precos
 ├── src/
-│   └── index.js         # Versao CLI (Playwright headless)
+│   └── index.js         # Versao CLI (Playwright headless) - debug/desenvolvimento
 ├── server/
-│   └── download-server.js  # Serve .exe na porta 9080
-├── debug/
-│   ├── cdp-exec.js      # Helper para executar JS via CDP
-│   └── *.png            # Screenshots de debug
-├── dist/
-│   ├── Replay-0.1.0.exe      # Build Windows (73MB)
-│   └── Replay-0.1.0.AppImage # Build Linux (112MB)
+│   ├── api-server.js    # Backend API Express: POST /api/ocr (Gemini 2.5 Flash), GET /health
+│   ├── download-server.js  # Serve instaladores .exe na porta 9080 (listagem de versoes)
+│   ├── ocr-gemini.py    # Script standalone: OCR via Google GenAI SDK (Python 3.13)
+│   └── ocr-hibrido.py   # Script standalone: OCR via EasyOCR + analise de pixels (Python 3.13)
 ├── config/
-│   ├── .env
-│   └── env.config.js
-└── scripts/
+│   ├── .env             # Variaveis de ambiente da branch atual
+│   └── env.config.js    # Loader central de configuracao
+├── installer/
+│   └── nsis-cleanup.nsh # Limpeza de cache e versoes antigas no instalador NSIS
+├── scripts/
+│   ├── backup-prod-db.sh  # Backup de banco de producao (template)
+│   └── load-env.sh        # Source de variaveis de ambiente
+├── arquivos_auxiliares/   # Fichas de frequencia de exemplo para teste OCR
+├── arquivos_gerados/      # Builds .exe versionados (v1.0.0 a v2.0.1)
+├── debug/
+│   ├── cdp-exec.js      # Helper para executar JS via CDP (WebSocket)
+│   └── *.png            # Screenshots de debug
+└── dist/                # Output do electron-builder (gitignored)
 ```
 
+### Servidores
+
+| Servidor | Arquivo | Porta (dev) | URL Publica | Systemd |
+|----------|---------|-------------|-------------|---------|
+| Backend API (OCR) | server/api-server.js | 5004 | https://replay-api.sistema.cloud | replay-backend |
+| Download Server | server/download-server.js | 9080 | https://replay.sistema.cloud | replay-download |
+
 ### Builds
-- Windows: `npm run build:win` → `dist/Replay-0.1.0.exe`
-- Linux: `npm run build:linux` → `dist/Replay-0.1.0.AppImage`
+- Windows: `npm run build:win` → instalador NSIS com wizard (`Replay-Setup-{version}.exe`)
+- Linux: `npm run build:linux` → AppImage
 - Dev direto: `npm start` (requer DISPLAY)
+- Backend dev: `npm run server` (api-server.js)
 - Debug com CDP: `npx electron desktop/main.js --no-sandbox --remote-debugging-port=9222`
+
+### Credenciais
+- Loader central: `/home/cazouvilela/credenciais/credentials.js`
+- `REPLAY_API_TOKEN` → `apps/replay.env` (autenticacao Bearer no backend)
+- `GEMINI_API_KEY` → `api_tokens/gemini.env` (API Google AI Studio)
 
 <!-- CHAPTER: 3 Ambientes (CRITICO) -->
 
@@ -66,9 +89,11 @@ replay/
 
 | Branch | Ambiente | Prefixo | DB | Backend | Frontend |
 |--------|----------|---------|-----|---------|----------|
-| dev | Desenvolvimento | dev_ | dev_replay | :5001 | :3000 |
-| stage | Pre-producao | stage_ | stage_replay | :5101 | :3100 |
-| main | Producao | *(nenhum)* | replay | :5201 | :3200 |
+| dev | Desenvolvimento | dev_ | dev_replay | :5004 | :3004 |
+| stage | Pre-producao | stage_ | stage_replay | :5104 | :3104 |
+| main | Producao | *(nenhum)* | replay | :5204 | :3204 |
+
+**Download server**: porta fixa 9080 (todos os ambientes).
 
 <!-- CHAPTER: 4 Funcionalidades -->
 
@@ -77,18 +102,34 @@ replay/
 ### Implementadas
 - Login manual no ZenFisio via webview (Cloudflare Turnstile requer humano)
 - Extracao automatica: seleciona todos profissionais, lista do dia, navega por datas
-- Extrai: data, horario, profissional, especialidade, paciente, valor, pago, data pgto
-- Geracao de planilha Excel (.xlsx) com formatacao e filtros
-- Servidor de download em replay.sistema.cloud (Cloudflare tunnel)
-- Build para Windows (.exe) e Linux (.AppImage)
+- Navegacao robusta: pula finais de semana, detecta overshoot, aceita data mais proxima
+- Extrai: data, horario, profissional, especialidade, paciente, valor, pago, data pgto, **status, convenio**
+- **Tabela de precos**: upload de .xlsx com precos por paciente/especialidade, validacao automatica
+- **Coluna Inconsistencias**: divergencias vs tabela (maior/menor que tabela, sem tabela, sem valor)
+- Geracao de planilha Excel (.xlsx) com formatacao, filtros e **aba Recebimentos**
+- **Aba Recebimentos**: agrupamento por paciente (Total, Recebidos, A receber, Agendamentos futuros) com colunas dinamicas por profissional
+- **OCR de fichas de frequencia** via Gemini 2.5 Flash (tier gratuito, ~15s por imagem)
+- **Indicadores visuais de incerteza** no OCR (campos com "?" destacados em vermelho)
+- **Campos editaveis** nos resultados OCR + toggle de assinatura (Sim/Nao clicavel)
+- Servidor de download em replay.sistema.cloud (Cloudflare tunnel) com listagem de versoes anteriores
+- Build para Windows (.exe com instalador NSIS e limpeza de cache) e Linux (.AppImage)
 
 ### Fluxo de Extracao
 1. Usuario faz login manual (Turnstile impede bot)
 2. Seleciona periodo (data inicio/fim)
-3. App clica "Selecionar todos" profissionais
-4. Muda para view "Lista do dia"
-5. Para cada dia: clica cada evento → popover → editar → extrai campos do modal
-6. Gera Excel no final
+3. (Opcional) Carrega tabela de precos (.xlsx)
+4. App clica "Selecionar todos" profissionais
+5. Muda para view "Lista do dia"
+6. Para cada dia: clica cada evento → popover → editar → extrai campos do modal
+7. Valida valores contra tabela de precos (se carregada)
+8. Gera Excel com aba Agendamentos + aba Recebimentos
+
+### Fluxo OCR de Fichas
+1. Usuario clica "Frequencia (OCR)" e seleciona imagem (JPEG/PNG/WebP, ate 20MB)
+2. Imagem enviada via IPC → main.js → backend (multipart POST /api/ocr com Bearer token)
+3. Backend envia para Gemini 2.5 Flash com prompt estruturado
+4. Resposta parseada como JSON (paciente, periodo, registros com data/modalidade/assinatura)
+5. Resultados exibidos em tabela editavel no painel inferior
 
 <!-- CHAPTER: 5 Seletores ZenFisio (CRITICO) -->
 
@@ -117,9 +158,12 @@ replay/
 | Valor | `#value` (formato: "150,00") |
 | Pago | `#paid_out` (checkbox) |
 | Data pagamento | `#date_payment` |
+| **Status** | `#status` (select: "Agendado", "Atendido", etc.) |
+| **Convenio** | `#agreement` (select: "Particular", etc.) |
 | Fechar modal | `#modalScheduling [data-dismiss="modal"]` |
 | Dia anterior | `.fc-prev-button` |
 | Proximo dia | `.fc-next-button` |
+| Titulo da data | `.fc-toolbar-title` (formato: "24 de marco de 2026") |
 
 <!-- CHAPTER: 6 Troubleshooting -->
 
@@ -139,29 +183,60 @@ replay/
 - ZenFisio usa Summernote (editor rich text) que cria note-popovers
 - Ao buscar `.popover.in`, filtrar por conteudo (deve ter "Paciente")
 
+### OCR
+- Timeout de 10 minutos no client (main.js req.setTimeout 600000)
+- Retry automatico em rate limit 429 (ate 3 tentativas, backoff 10s/20s/30s)
+- Resposta pode conter markdown fences (```json ... ```) - parser remove automaticamente
+- Campos incertos marcados com "?" pelo modelo
+
 <!-- CHAPTER: 7 Proximas Features -->
 
 ## Proximas Funcionalidades
 
-- [ ] Melhorar navegacao de datas (usar FullCalendar API se possivel)
-- [ ] Tratar dias sem agendamentos na navegacao
-- [ ] Adicionar barra de progresso visual
-- [ ] Salvar Excel automaticamente (sem dialogo) na versao CLI
+- [ ] Exportar resultados OCR para Excel
+- [ ] Cruzar dados OCR com dados extraidos da agenda (reconciliacao)
+- [ ] Batch OCR (multiplas fichas de uma vez)
 
 <!-- CHAPTER: 8 Infra -->
 
 ## Infraestrutura
 
+### Backend API (OCR)
+- Systemd: `replay-backend.service`
+- URL: https://replay-api.sistema.cloud
+- Endpoint principal: `POST /api/ocr` (imagem → JSON via Gemini)
+- Healthcheck: `GET /health`
+- Auth: Bearer token (REPLAY_API_TOKEN)
+
 ### Servidor de Download
 - Systemd: `replay-download.service`
 - URL: https://replay.sistema.cloud
-- Rota no Cloudflare tunnel config (local + remoto)
+- Pagina HTML com versao atual + listagem de versoes anteriores
+- Builds lidos de `dist/` (apenas arquivos .exe Setup)
 
 ### Cloudflare
 - Tunnel config remota sobrescreve local - atualizar AMBAS
 - Token CF_API_TOKEN tem permissao para atualizar config via API
+- Rotas: `replay-api.sistema.cloud` → localhost:5004, `replay.sistema.cloud` → localhost:9080
 
-<!-- CHAPTER: 9 Referencias -->
+### API OCR - Gemini 2.5 Flash
+- Tier gratuito Google AI Studio: 15 req/min, 1M tokens/dia
+- Modelo: `gemini-2.5-flash` via REST (`generativelanguage.googleapis.com/v1beta`)
+- Imagens suportadas: JPEG, PNG, WebP (ate 20MB)
+
+<!-- CHAPTER: 9 Historico de Versoes -->
+
+## Historico de Versoes
+
+| Versao | Data | Descricao |
+|--------|------|-----------|
+| 2.0.1 | 2026-04-12 | Fix: botao OCR travava apos primeiro upload + prompt assinatura |
+| 2.0.0 | 2026-04-12 | OCR via Gemini 2.5 Flash (gratuito, ~15s) |
+| 1.1.x | 2026-04 | OCR via Claude (descontinuado), indicadores de incerteza |
+| 1.0.x | 2026-04 | Release OCR, download com versoes, keepalive Cloudflare |
+| 0.1.0 | 2026-03 | Versao inicial: extracao de agenda, tabela de precos, recebimentos |
+
+<!-- CHAPTER: 10 Referencias -->
 
 ## Referencias
 
@@ -171,6 +246,6 @@ replay/
 
 ---
 
-**Ultima Atualizacao**: 2026-03-23
-**Versao**: 0.1.0
-**Status**: Funcional - extracao validada
+**Ultima Atualizacao**: 2026-04-12
+**Versao**: 2.0.1
+**Status**: Funcional - extracao + OCR validados
