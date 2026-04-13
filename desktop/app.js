@@ -19,6 +19,7 @@ const priceTableLabel = document.getElementById('price-table-label');
 
 const ocrUploadInput = document.getElementById('ocr-upload');
 const ocrUploadLabel = document.getElementById('ocr-upload-label');
+const ocrUploadText = document.getElementById('ocr-upload-text');
 const ocrResultsPanel = document.getElementById('ocr-results-panel');
 const ocrResultsTitle = document.getElementById('ocr-results-title');
 const ocrResultsTbody = document.getElementById('ocr-results-tbody');
@@ -828,7 +829,7 @@ ocrUploadInput.addEventListener('change', async (e) => {
 
   try {
     ocrUploadLabel.classList.add('processing');
-    ocrUploadLabel.textContent = 'Processando OCR...';
+    ocrUploadText.textContent = 'Processando OCR...';
     log(`Enviando imagem para OCR: ${file.name} (${(file.size / 1024).toFixed(0)} KB)...`);
 
     const arrayBuffer = await file.arrayBuffer();
@@ -847,14 +848,14 @@ ocrUploadInput.addEventListener('change', async (e) => {
       displayOcrResults(data);
       ocrUploadLabel.classList.remove('processing');
       ocrUploadLabel.classList.add('loaded');
-      ocrUploadLabel.textContent = `${file.name} (${data.registros.length} linhas)`;
+      ocrUploadText.textContent = `${file.name} (${data.registros.length} linhas)`;
     } else {
       throw new Error(result.error || 'Resposta invalida do servidor');
     }
   } catch (err) {
     log(`Erro OCR: ${err.message}`, 'error');
     ocrUploadLabel.classList.remove('processing');
-    ocrUploadLabel.textContent = 'Frequencia (OCR)';
+    ocrUploadText.textContent = 'Frequencia (OCR)';
   }
 
   // Reset do input para permitir reenvio do mesmo arquivo
@@ -865,7 +866,7 @@ ocrUploadInput.addEventListener('change', async (e) => {
 btnOcrClose.addEventListener('click', () => {
   ocrResultsPanel.classList.add('hidden');
   ocrUploadLabel.classList.remove('loaded');
-  ocrUploadLabel.textContent = 'Frequencia (OCR)';
+  ocrUploadText.textContent = 'Frequencia (OCR)';
 });
 
 log('Replay iniciado. Aguardando login no ZenFisio...');

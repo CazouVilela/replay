@@ -50,7 +50,10 @@ function authMiddleware(req, res, next) {
 // Prompt OCR
 const PROMPT_OCR = `Faca o OCR da tabela nessa imagem e retorne os dados como JSON.
 
-Na coluna assinatura: true se existe uma assinatura, false se nao existe.
+Coluna assinatura — campo Sim ou Nao:
+- true APENAS se existir uma assinatura real (nome, rubrica, rabisco intencional) naquela linha
+- false se a linha estiver vazia, em branco, ou tiver apenas um traco/risco que seja extrapolacao/continuacao de assinaturas de outras linhas
+
 Se nao tiver certeza de algum campo, adicione "?" no final do valor.
 
 Retorne APENAS o JSON puro, sem markdown e sem texto adicional:
